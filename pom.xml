@@ -4,6 +4,22 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- 0. Скачать проект из репозитория https://github.com/vasylmalik/project-maven.git
+         1. Заменить исходный pom.xml на эту версию файла
+         2. Выполни команду в директории с проектом (для корректной сборки одной зависимости, ниже подробная инструкция):
+             mvn \
+             deploy:deploy-file \
+             -Durl=file:./lib \
+             -Dfile=./lib/desktop-game-engine.jar \
+             -DgroupId=com.javarush \
+             -DartifactId=desktop-game-engine \
+             -Dpackaging=jar \
+             -Dversion=1.0
+         3. Из директории проекта в терминале прописать "mvn clear install"
+         4. Итоговый jar файл сохраниться в локальный репозиторий maven
+         5. Из любой директории можно вызвать запуск jar файла командой в терминале:
+         "java -jar ~/.m2/repository/jru/module3/project-maven/1.0/project-maven-1.0.jar" -->
+
     <groupId>jru.module3</groupId>
     <artifactId>project-maven</artifactId>
     <version>1.0</version>
@@ -14,10 +30,78 @@
     </properties>
 
     <dependencies>
+        <!-- Добавить зависимости: org.apache.commons: commons-lang3: 3.12.0 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.12.0</version>
+        </dependency>
+
+        <!-- Добавить зависимости: org.openjfx: javafx-controls: 18.0.1 -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>18.0.1</version>
+        </dependency>
+
+        <!-- Добавить зависимости: org.junit.jupiter: junit-jupiter-engine: 5.8.2 (с scope test) -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>5.8.2</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Для того, чтобы эта зависимость могла существовать и корректно собираться в maven можно сделать один из вариантов:
+             файл из исходного проекта: lib/desktop-game-engine.jar поместить в локальный репозиторий maven
+             ~/.m2/repository в правильную структуру папок:
+             com -> javarush -> desktop-game-engine -> 1.0 -> desktop-game-engine.jar
+             либо сделать это в любом другом месте, но тогда определеить дополнительный локальный репозиторий,
+             где maven будет искать нужную библиотеку
+
+             В этом помогут команды (вариант моей реализации с доп.локальный репозиторием maven)
+             Команды прописать в директории с проектом:
+             mvn \
+             deploy:deploy-file \
+             -Durl=file:./lib \
+             -Dfile=./lib/desktop-game-engine.ja \
+             -DgroupId=com.javarush \
+             -DartifactId=desktop-game-engine \
+             -Dpackaging=jar \
+             -Dversion=1.0 -->
+        <dependency>
+            <groupId>com.javarush</groupId>
+            <artifactId>desktop-game-engine</artifactId>
+            <version>1.0</version>
+        </dependency>
 
     </dependencies>
 
+    <!--тот самый адрес локального репозитория с нужным jar файлом для последней зависимости-->
+    <repositories>
+        <repository>
+            <id>localrep</id>
+            <name>local repository</name>
+            <url>file:${project.basedir}/lib</url>
+        </repository>
+    </repositories>
+
     <build>
+        <!-- Добавить секцию “resources”, в которой сказать, что собранные JAR-зависимости это ресурс,
+        чтоб плагин maven-jar-plugin сложил их внутрь JAR-файла в папку lib/ -->
+        <!--Этот пункт также повлияет на плагин maven-dependency-plugin,
+        т.к. надо будет указать <phase>generate-resources</phase>-->
+        <resources>
+            <resource>
+                <directory>
+                    ${project.build.directory}/lib
+                </directory>
+                <targetPath>
+                    lib/
+                </targetPath>
+            </resource>
+        </resources>
+
         <plugins>
             <!-- Usual compilation -->
             <plugin>
@@ -38,6 +122,69 @@
                     <mainClass>com.javarush.games.racer.RacerGame</mainClass>
                 </configuration>
             </plugin>
+
+            <!-- Добавленные плагины -->
+            <!-- 5. В плагине maven-surefire-plugin сделать конфигурацию, чтоб тест StrangeTest
+                    не запускался при сборке. Остальные тесты должны выполняться. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.12.4</version>
+                <configuration>
+                    <excludes>
+                        <exclude>StrangeTest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- 4. Добавить плагин, который соберет все зависимости (с scope compile)
+                    и сложит в какую-то директорию при сборке; -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>2.5.1</version>
+                <configuration>
+                    <outputDirectory>
+                        ${project.build.directory}/lib/
+                    </outputDirectory>
+                    <includeScope>compile</includeScope>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--4. Добавить плагин maven-jar-plugin, который сделает jar файл, содержащий код игры и зависимости.
+             В этом плагине нужно сконфигурировать файл MANIFEST.MF, чтоб он содержал секции:
+             Class-Path, Main-Class и Rsrc-Main-Class
+	         В Class-Path должны быть прописаны все наши JAR-зависимости.
+	         В Main-Class должен быть прописан класс org.eclipse.jdt.internal.jarinjarloader.JarRsrcLoader,
+	         который умеет использовать classpath из JAR-файлов, а также умеет стартовать приложение на JavaFX.
+	         В Rsrc-Main-Class должен быть прописан стартовый класс игры (com.javarush.games.racer.RacerGame). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.4</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addClasspath>true</addClasspath>
+                            <classpathPrefix>lib/</classpathPrefix>
+                            <mainClass>org.eclipse.jdt.internal.jarinjarloader.JarRsrcLoader</mainClass>
+                        </manifest>
+                        <manifestEntries>
+                            <Rsrc-Main-Class>com.javarush.games.racer.RacerGame</Rsrc-Main-Class>
+                            <Class-Path>./</Class-Path>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+
         </plugins>
     </build>
 
