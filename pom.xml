@@ -90,8 +90,6 @@
     <build>
         <!-- Добавить секцию “resources”, в которой сказать, что собранные JAR-зависимости это ресурс,
         чтоб плагин maven-jar-plugin сложил их внутрь JAR-файла в папку lib/ -->
-        <!--Этот пункт также повлияет на плагин maven-dependency-plugin,
-        т.к. надо будет указать <phase>generate-resources</phase>-->
         <resources>
             <resource>
                 <directory>
